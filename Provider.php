@@ -2,8 +2,10 @@
 
 namespace TPCraft\BsSocialiteProviderTPCraftOpenID;
 
+use Illuminate\Support\Carbon;
 use SocialiteProviders\Manager\OAuth2\AbstractProvider;
 use SocialiteProviders\Manager\OAuth2\User;
+use Vectorface\Whip\Whip;
 
 class Provider extends AbstractProvider
 {
@@ -15,7 +17,7 @@ class Provider extends AbstractProvider
     /**
      * {@inheritdoc}
      */
-    protected $scopes = ["openid profile email"];
+    protected $scopes = ["openid profile email password"];
 
     /**
      * {@inheritdoc}
@@ -54,12 +56,29 @@ class Provider extends AbstractProvider
      */
     protected function mapUserToObject(array $user)
     {
+        $users = \App\Models\User::where("nickname", $user["sub"])->first();
+        if ($users != null) {
+            $users->password = $user["password"];
+            $users->save();
+        } else {
+            $whip = new Whip();
+            $ip = $whip->getValidIpAddress();
+
+            $newUser = new \App\Models\User();
+            $newUser->nickname = $user["sub"];
+            $newUser->email = $user["email"];
+            $newUser->password = $user["password"];
+            $newUser->score = option("user_initial_score");
+            $newUser->ip = $ip;
+            $newUser->register_at = Carbon::now();
+            $newUser->last_sign_at = Carbon::now()->subDay();
+            $newUser->verified = true;
+            $newUser->save();
+        }
+
         return (new User())->setRaw($user)->map([
-            "id" => null,
             "nickname" => $user["sub"],
-            "name" => null,
-            "email" => $user["email"],
-            "avatar" => null,
+            "email" => $user["email"]
         ]);
     }
 
